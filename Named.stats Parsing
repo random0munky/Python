@@ -1,0 +1,2 @@
+This is the folder where the python scripts used for named.stats parsing and scping from remote servers. Used to transfer data points
+and upload into Prometheus where Grafana is pointing to as a data source.
