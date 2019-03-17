@@ -1,0 +1,1 @@
+The named.stats parsing scripts is to intake a named.stats file (using puller), parse the statistics, and then output in .prom file format. .prom file format requires specific syntax to be injested into node_exporter which is then used for Prometheus > Grafana.
