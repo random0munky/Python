@@ -25,7 +25,8 @@ import os
 import sys
 
 
-SERVER = sys.argv[1]
+#SERVER = sys.argv[1]
+SERVER = "wtc2b1fdns01v"
 NAMED_STATS_FILE = "/appl/node_exporter/stats/original/named.stats_%s" %(SERVER)
 NAMED_STATS_FORMATTED_FILE_CURRENT = "/appl/node_exporter/stats/formatted/named.stats_%s" %(SERVER)
 NAMED_STATS_FORMATTED_FILE_PREVIOUS = "/appl/node_exporter/stats/formatted/previous.named.stats_%s" %(SERVER)
@@ -72,76 +73,133 @@ def output_formatted_file(orig_file, formatted_current, formatted_previous):
 # UPDATE 9/27/18 - Outputting a tuple array which contains: (stat_value, stat name)
 # This way, the statistics are "flexible" in the sense of logging all types of traffic. No traffic shall be left out.
 # In addition, record the type of record as well.
+# Example output: Incoming Queries: [('145864', 'A', 'gauge'), ('3', 'SOA', 'gauge'), ('1718', 'PTR', 'gauge'), ('271', 'HINFO', 'gauge'), ('136965', 'AAAA', 'gauge'), ('1', 'SRV', 'gauge'), ('1', 'ANY', 'gauge')]
+
 def formatted_iteration(formatted_file):
 	new_stats = open(formatted_file, "r")
 	new_content = new_stats.readlines()
-	section_line = []
+	
+	# Creating line number arrays for each section of the named.stats file
+	inc_req_line = []
+	inc_query_line = []
+	out_rcodes_line = []
+	out_query_line = []
+	ns_query_line = []
+	resolver_line = []
+	cache_line = []
+	
 	# Lets look for lines that start with a "++".
 	# Get the line numbers for each of the sections; they start with a "++"
 	for num, line in enumerate(new_content, 1):
-		if line.startswith("++ "):
-			section_line.append(num)
+		if line.startswith("++ Incoming Requests"):
+			inc_req_line.append(num)
+		elif line.startswith("++ Incoming Queries"):
+			inc_query_line.append(num)
+		elif line.startswith("++ Outgoing Rcodes"):
+			out_rcodes_line.append(num)
+		elif line.startswith("++ Outgoing Queries"):
+			out_query_line.append(num)
+		elif line.startswith("++ Name Server Statistics"):
+			ns_query_line.append(num)
+		elif line.startswith("++ Resolver Statistics"):
+			resolver_line.append(num)
+		elif line.startswith("++ Cache Statistics"):
+			cache_line.append(num)
 			
 	# Index for which array I'm looping through for adding values to.
 	array_index = 0
 	# Type of metric (counter, gauge, or histogram)
 	metric_type = "gauge"
 	# For loops to go through each section of the named.stats file
+	# The if statement checks if the line starts with a digit. If it does not, pass to next line.
 	#Incoming Requests: QUERY, etc.
 	incoming_requests = []
-	for line in range(section_line[0], (section_line[1] - 1)):
+	for line in range(inc_req_line[0], (inc_query_line[0] - 1)):
 		inc_request = new_content[line].strip()
-		inc_value = inc_request.split(' ', 1)[0]
-		inc_stat = inc_request.split(' ', 1)[1]
-		inc_stat = check_stat(inc_stat)
-		tuple = inc_value, inc_stat, metric_type
-		incoming_requests.append(tuple)
+		if inc_request[0].isdigit():
+			inc_value = inc_request.split(' ', 1)[0]
+			inc_stat = inc_request.split(' ', 1)[1]
+			inc_stat = check_stat(inc_stat)
+			tuple = inc_value, inc_stat, metric_type
+			incoming_requests.append(tuple)
+		else:
+			pass
 	#print "Incoming Requests: %s" %(incoming_requests)
 	
 	# Incoming Queries: A, PTR, AAAA, NAPTR, ANY, etc.
 	incoming_queries = []
-	for line in range(section_line[1], (section_line[2] - 1)):
+	for line in range(inc_query_line[0], (out_rcodes_line[0] - 1)):
 		inc_query = new_content[line].strip()
-		inc_value = inc_query.split(' ', 1)[0]
-		query_stat = inc_query.split(' ',1)[1]
-		query_stat = check_stat(query_stat)
-		tuple = inc_value, query_stat, metric_type
-		incoming_queries.append(tuple)
+		if inc_query[0].isdigit():
+			inc_value = inc_query.split(' ', 1)[0]
+			query_stat = inc_query.split(' ',1)[1]
+			query_stat = check_stat(query_stat)
+			tuple = inc_value, query_stat, metric_type
+			incoming_queries.append(tuple)
+		else:
+			pass
 	#print "Incoming Queries: %s" %(incoming_queries)
+	
+	# Outgoing Rcodes: NOERROR, SERVFAIL, NXDOMAIN
+	outgoing_rcodes = []
+	for line in range(out_rcodes_line[0], (out_query_line[0] -1)):
+		rcode_query = new_content[line].strip()
+		if rcode_query[0].isdigit():
+			rcode_query_value = rcode_query.split(' ', 1)[0]
+			query_stat = rcode_query.split(' ',1)[1]
+			rcode_query_stat = check_stat(query_stat)
+			tuple = rcode_query_value, rcode_query_stat, metric_type
+			outgoing_rcodes.append(tuple)
+		else:
+			pass
+	#print "Outgoing Rcodes: %s" %(outgoing_rcodes)
 	
 	# Outgoing Queries: A, PTR, AAAA, NAPTR, ANY, etc
 	outgoing_queries = []
-	for line in range(section_line[2] + 1, (section_line[3] - 2)):
+	for line in range(out_query_line[0], (ns_query_line[0] - 1)):
 		out_query = new_content[line].strip()
-		out_value = out_query.split(' ', 1)[0]
-		query_stat = out_query.split(' ',1)[1]
-		query_stat = check_stat(query_stat)
-		tuple = out_value, query_stat, metric_type
-		outgoing_queries.append(tuple)
+		if out_query[0].isdigit():
+			out_value = out_query.split(' ', 1)[0]
+			query_stat = out_query.split(' ',1)[1]
+			query_stat = check_stat(query_stat)
+			tuple = out_value, query_stat, metric_type
+			outgoing_queries.append(tuple)
+		else:
+			pass
 	#print "Outgoing Queries: %s" %(outgoing_queries)
 	
 	# Name Server Statistics: IPv4 requests received, requests with EDNS(0) received, TCP requests received, responses sent, truncated responses sent, responses with EDNS(0) sent, queries resulted in successful answer, queries resulted in authoritative answer, queries resulted in non authoritative answer, queries resulted in nxrrset, queries resulted in SERVFAIL, queries resulted in NXDOMAIN, queries caused recursion, queries dropped, UDP queries received, TCP queries received
 	ns_stats = []
-	for line in range(section_line[3], (section_line[4] - 1)):
+	for line in range(ns_query_line[0], (resolver_line[0] - 1)):
 		ns_stat = new_content[line].strip()
-		ns_value = ns_stat.split(' ', 1)[0]
-		ns_stat = ns_stat.split(' ',1)[1]
-		ns_stat = check_stat(ns_stat)
-		tuple = ns_value, ns_stat, metric_type
-		ns_stats.append(tuple)
+		if ns_stat[0].isdigit():
+			ns_value = ns_stat.split(' ', 1)[0]
+			ns_stat = ns_stat.split(' ',1)[1]
+			ns_stat = check_stat(ns_stat)
+			tuple = ns_value, ns_stat, metric_type
+			ns_stats.append(tuple)
+		else:
+			pass
 	#print "Name Server Stats: %s" %(ns_stats)
+	#for tuple in ns_stats:
+	#	print tuple
 	
 	#Resolver Statistics: IPv4 queries sent, IPv4 responses received, NXDOMAIN received, SERVFAIL received, truncated responses received, lame delegations received, query retries, query timeouts, IPv4 NS address fetches, IPv6 NS address fetches, IPv4 NS address fetch failed, IPv6 NS address fetch failed, queries with RTT < 10ms, queries with RTT 10-100ms, queries with RTT 100-500ms, queries with RTT 500-800ms, queries with RTT 800-1600ms, bucket size, SIT sent client cookie only
 	# Had to skip an array value to be in the Resolver Statistics section of the file.
 	resolver_stats = []
-	for line in range(section_line[5] + 2, (section_line[6] - 3)):
+	for line in range(resolver_line[0], (cache_line[0] - 1)):
 		resolver_stat = new_content[line].strip()
-		resolver_value = resolver_stat.split(' ', 1)[0]
-		resolver_stat = resolver_stat.split(' ',1)[1]
-		resolver_stat = check_stat(resolver_stat)
-		tuple = resolver_value, resolver_stat, metric_type
-		resolver_stats.append(tuple)
+		if resolver_stat[0].isdigit():
+			resolver_value = resolver_stat.split(' ', 1)[0]
+			resolver_stat = resolver_stat.split(' ',1)[1]
+			resolver_stat = check_stat(resolver_stat)
+			tuple = resolver_value, resolver_stat, metric_type
+			resolver_stats.append(tuple)
+		else:
+			pass
 	#print "Resolver Stats: %s" %(resolver_stats)
+	#for tuple in resolver_stats:
+	#	print tuple
 	
 	# Return each of the arrays for another function to do the formatting
 	return incoming_requests, incoming_queries, outgoing_queries, ns_stats, resolver_stats
@@ -265,7 +323,19 @@ def make_prometheus_metrics(incoming_requests, incoming_queries, outgoing_querie
 	output_prometheus_metrics(delta_resolver_stats, file_index, metric_note)
 	
 	
-	
+# This function is used to set variable to prom file file paths.
+# Assign correct metrics for each file associated prom file.
+# Populate the prom file with the proper metric and metric value in using the proper prom template.
+# Example of prom template for metrics:
+## HELP wtc2b1fdns01v_QUERY_inc_req wtc2b1fdns01v_QUERY_inc_req
+## TYPE wtc2b1fdns01v_QUERY_inc_req gauge
+#wtc2b1fdns01v_QUERY_inc_req 285071
+
+
+## HELP wtc2b1fdns01v_A_inc_query wtc2b1fdns01v_A_inc_query
+## TYPE wtc2b1fdns01v_A_inc_query gauge
+#wtc2b1fdns01v_A_inc_query 145991
+
 def output_prometheus_metrics(named_stats_array, file_index, metric_note):
 	# To set variables for each of the metric files
 	inc_req_prom = "%s/%s_named_incoming_requests.prom" %(NAMED_STATS_PROM_DIR, SERVER)
@@ -309,6 +379,7 @@ def output_prometheus_metrics(named_stats_array, file_index, metric_note):
 			""") %(metric_name, metric_name, metric_name, metric_type, metric_name, metric_value)
 		# Write a separate file for each section of named.stats since there's a line/size limit that node_exporter can take in
 		prom_file.write(metric_text)
+		print metric_text
 
 # This function is used to check if there are same number of array elements in previous and current arrays
 # If there is a missing array element in previous array compared to current array:
